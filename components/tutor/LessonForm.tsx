@@ -132,6 +132,10 @@ export function LessonForm({
     }
 
     setError(null)
+    // A single topic covers the whole lesson, so if its minutes are left blank
+    // default them to the lesson length (60 if that's blank too) — tutors often
+    // forget to re-enter it. With two or more topics we leave blanks as null.
+    const lessonLength = duration ? Number(duration) : 60
     const payload = {
       studentId,
       date,
@@ -139,7 +143,11 @@ export function LessonForm({
       notes,
       topics: chosen.map((t) => ({
         topicId: t.topicId,
-        minutes: t.minutes ? Number(t.minutes) : null,
+        minutes: t.minutes
+          ? Number(t.minutes)
+          : chosen.length === 1
+            ? lessonLength
+            : null,
       })),
       paperIds,
       homework: hwOpen
