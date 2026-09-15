@@ -24,7 +24,7 @@ export function DateInput({
   const nativeRef = useRef<HTMLInputElement>(null)
 
   // Reconcile during render (React's recommended alternative to a setState
-  // effect): when the ISO value changes from outside, reflect it in the text —
+  // effect): when the ISO value changes from outside, reflect it in the text -
   // but partial/invalid typing never changes `value`, so it won't fight typing.
   if (value !== lastValue) {
     setLastValue(value)
@@ -68,7 +68,7 @@ export function DateInput({
           <path d="M2 6h12M5 2v2M11 2v2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
         </svg>
       </button>
-      {/* Hidden native picker — its value drives the field, but it's never shown
+      {/* Hidden native picker - its value drives the field, but it's never shown
           (so the OS-locale mm/dd/yyyy rendering is never visible). */}
       <input
         ref={nativeRef}

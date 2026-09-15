@@ -52,14 +52,14 @@ export type TopicOption = {
   id: string;
   topic: string;
   section: string;
-  /** "A_LEVEL" | "GCSE" — the top-level grouping in the topic picker. */
+  /** "A_LEVEL" | "GCSE" - the top-level grouping in the topic picker. */
   qual: string;
 };
 
 export type PaperOption = {
   id: string;
   label: string;
-  /** "A Level" | "GCSE" — the top-level filter in the picker. */
+  /** "A Level" | "GCSE" - the top-level filter in the picker. */
   qual: string;
   board: string;
   module: string;

@@ -106,7 +106,7 @@ export function uniq(values: (string | null)[]) {
 }
 
 /**
- * Orders question numbers naturally (1, 2, 10 — not 1, 10, 2). questions.
+ * Orders question numbers naturally (1, 2, 10 - not 1, 10, 2). questions.
  * question_number is an int4 in the database, but some rows arrive as strings
  * (e.g. "1a"), so coerce to string and compare numerically rather than calling
  * localeCompare on a value that might be a number.

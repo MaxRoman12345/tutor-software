@@ -121,7 +121,7 @@ export function HomeworkList({
   homework: HomeworkItem[]
   studentId: string
   canDelete?: boolean
-  /** Admin view: no delete, no marking, no complete toggle — display only. */
+  /** Admin view: no delete, no marking, no complete toggle - display only. */
   readOnly?: boolean
 }) {
   const router = useRouter()
@@ -361,7 +361,7 @@ export function HomeworkList({
                       : 'border-neutral-300 text-neutral-700 hover:border-neutral-500'
                       }`}
                   >
-                    {done ? '✓ Completed — undo' : 'Mark as complete'}
+                    {done ? '✓ Completed - undo' : 'Mark as complete'}
                   </button>
                 )}
               </div>

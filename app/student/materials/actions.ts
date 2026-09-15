@@ -76,7 +76,7 @@ export async function getPapers(): Promise<Paper[]> {
  * Pass a specific student's id (tutor view) to see their progress instead -
  * relies on RLS to enforce the caller is allowed to read that student's rows.
  *
- * Keyed by past_paper id — every question belongs to exactly one paper.
+ * Keyed by past_paper id - every question belongs to exactly one paper.
  */
 export async function getAllProgress(
   studentId?: string,
@@ -90,7 +90,7 @@ export async function getAllProgress(
   }
   if (!targetId) return {};
 
-  // Both are whole-table reads, so they have to be paged — see lib/fetch-all.ts.
+  // Both are whole-table reads, so they have to be paged - see lib/fetch-all.ts.
   const [questions, progress] = await Promise.all([
     fetchAllRows<{ id: string; pp_id: string | null }>(
       "getAllProgress questions",
@@ -160,7 +160,7 @@ async function getQuestionsForSource(
     return [];
   }
 
-  // Only this paper's questions — reading the student's whole progress table
+  // Only this paper's questions - reading the student's whole progress table
   // here used to hit PostgREST's 1000-row cap and silently drop marks.
   const questionIds = (questionsRes.data ?? []).map((q) => q.id);
 
@@ -190,7 +190,7 @@ async function getQuestionsForSource(
   );
 }
 
-/** studentId optional — omit for a browse view with no marks. */
+/** studentId optional - omit for a browse view with no marks. */
 export async function getQuestionsForPaper(
   paperId: string,
   studentId?: string,

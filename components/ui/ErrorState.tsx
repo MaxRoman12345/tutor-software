@@ -2,7 +2,7 @@
 
 /**
  * Shared "something went wrong" panel. Used by route error boundaries
- * (error.tsx) and by client pages when a data fetch fails — so an error shows a
+ * (error.tsx) and by client pages when a data fetch fails - so an error shows a
  * message + Retry instead of an endless loading state.
  */
 export function ErrorState({

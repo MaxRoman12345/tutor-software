@@ -21,7 +21,7 @@ export function FilterRow({
   /**
    * Marks which options belong to the student's own programme. Anything
    * outside it is dampened so their own board stands out, but stays fully
-   * clickable — every board is still browsable.
+   * clickable - every board is still browsable.
    */
   inProgramme?: (v: string) => boolean
 }) {

@@ -60,7 +60,7 @@ export type TopicRank = {
 
 /**
  * The logged-in student's tutor-assigned strength ranks (1-5) per topic. Reads
- * student_topic_assessments directly — the student's RLS select policy scopes
+ * student_topic_assessments directly - the student's RLS select policy scopes
  * it to their own rows, and assessment notes are now visible to the student, so
  * the old rank-only view is no longer needed. Topics with no rank set are omitted.
  */
@@ -138,7 +138,7 @@ export async function getDashboardData(
     };
   }
 
-  // questions and progress are whole-table reads, so they have to be paged —
+  // questions and progress are whole-table reads, so they have to be paged -
   // see lib/fetch-all.ts.
   const [profileRes, topicsRes, papersRes, questions, progress] =
     await Promise.all([

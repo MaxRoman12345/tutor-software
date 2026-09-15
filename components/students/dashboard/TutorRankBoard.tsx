@@ -5,7 +5,7 @@ import { sectionLabel, sectionOrder } from '@/lib/sections'
 
 /**
  * Student-facing view of the tutor's per-topic strength ranks (1-5). Shows
- * only the bars — the tutor's notes are never sent to the student.
+ * only the bars - the tutor's notes are never sent to the student.
  */
 export function TutorRankBoard({ ranks }: { ranks: TopicRank[] }) {
   if (ranks.length === 0) return null

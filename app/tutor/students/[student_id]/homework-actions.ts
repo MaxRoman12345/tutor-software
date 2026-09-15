@@ -19,7 +19,7 @@ export type HomeworkItem = {
   title: string;
   notes: string | null;
   files: HomeworkFile[];
-  /** Student's manual "done" tick — the sole source of completion. */
+  /** Student's manual "done" tick - the sole source of completion. */
   completed: boolean;
   assignedLabel: string;
   dueLabel: string | null;
@@ -113,7 +113,7 @@ export async function getHomework(studentId: string): Promise<HomeworkItem[]> {
     questionsByPaper.get(q.pp_id)!.push(q.id);
   }
 
-  // Only the questions these homeworks actually cover — reading the student's
+  // Only the questions these homeworks actually cover - reading the student's
   // whole progress table here used to hit PostgREST's 1000-row cap and report
   // completed questions as unmarked.
   const questionIds = (paperQs.data ?? []).map((q) => q.id);
@@ -157,7 +157,7 @@ export async function getHomework(studentId: string): Promise<HomeworkItem[]> {
     }
 
     const marked = correct + partial + incorrect;
-    // A homework is complete only when the student has ticked it — never
+    // A homework is complete only when the student has ticked it - never
     // auto-completed from question progress.
     const complete = r.completed;
 

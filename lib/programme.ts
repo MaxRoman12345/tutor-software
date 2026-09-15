@@ -1,6 +1,6 @@
 /**
  * A student's `users.exam_board` is a combined enum encoding qualification,
- * board and — for GCSE — tier and whether Further Maths is included:
+ * board and - for GCSE - tier and whether Further Maths is included:
  *
  *   A_LEVEL_EDEXCEL / A_LEVEL_AQA / A_LEVEL_OCR_A / A_LEVEL_OCR_B
  *   GCSE_AQA_H            AQA Higher (normal)          → spec NORMAL
@@ -43,7 +43,7 @@ const TIER_SPEC: Record<string, string> = {
 /** Decode users.exam_board into the programme units it covers. */
 function parseProgramme(examBoard: string): Unit[] {
   if (examBoard.startsWith("A_LEVEL_")) {
-    // A-Level has no tiers — both old and new spec count.
+    // A-Level has no tiers - both old and new spec count.
     return [
       { level: "A_LEVEL", board: boardKey(examBoard.slice("A_LEVEL_".length)), specs: "ALL" },
     ];
@@ -79,7 +79,7 @@ function parseProgramme(examBoard: string): Unit[] {
  * Returns a predicate `(gcseAlevel, board, specLevel?) => boolean`.
  *  - Pass all three to test a specific paper (counts, topic filtering).
  *  - Omit specLevel to test only whether a (qualification, board) is in the
- *    programme at any tier — used for board-level highlighting in Materials.
+ *    programme at any tier - used for board-level highlighting in Materials.
  *
  * No board set (or an unrecognised value) → matches everything, so a missing
  * setting surfaces the whole catalogue rather than silently hiding it.

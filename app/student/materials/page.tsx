@@ -93,7 +93,7 @@ async function downloadPdf(url: string, filename: string) {
 }
 
 /**
- * The open detail view for a single paper — its PDFs plus the per-question
+ * The open detail view for a single paper - its PDFs plus the per-question
  * marking flow.
  */
 function PaperDetail({
@@ -230,8 +230,8 @@ export default function MaterialsPage() {
         setProgress(pr)
         setExamBoard(eb)
 
-        // Jump straight to the student's own programme where we can tell it —
-        // qualification then board — so the common case is one tap from papers.
+        // Jump straight to the student's own programme where we can tell it -
+        // qualification then board - so the common case is one tap from papers.
         const filter = programmeFilter(eb)
         const mineQual = uniq(p.map((x) => x.gcse_alevel)).find((q) =>
           p.some((x) => x.gcse_alevel === q && filter(q, x.exam_board ?? ''))

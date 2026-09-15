@@ -75,7 +75,7 @@ export async function getStudentPapers(studentId: string): Promise<{
 }> {
   const supabase = await createClient();
 
-  // questions and progress are whole-table reads, so they have to be paged —
+  // questions and progress are whole-table reads, so they have to be paged -
   // see lib/fetch-all.ts.
   const [profileRes, papersRes, questionRows, progressRows] =
     await Promise.all([

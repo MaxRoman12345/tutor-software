@@ -1,6 +1,6 @@
 /**
  * PostgREST caps every response at a fixed number of rows (1000 on Supabase by
- * default) and does it *silently* — a table that outgrows the cap just starts
+ * default) and does it *silently* - a table that outgrows the cap just starts
  * returning partial data with no error. Any read that genuinely needs a whole
  * table has to page through it.
  *

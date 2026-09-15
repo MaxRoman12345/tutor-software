@@ -46,7 +46,7 @@ export async function getTutorStudents(): Promise<TutorStudent[]> {
   // Counted the same way as the student dashboard so the two views agree:
   // each student is measured against their own programme, not every paper in
   // the database. questions/progress are whole-table reads, so they have to be
-  // paged — see lib/fetch-all.ts.
+  // paged - see lib/fetch-all.ts.
   const [papersRes, questions, progress] = await Promise.all([
     supabase.from("past_paper").select("id, gcse_alevel, exam_board, spec_level"),
     fetchAllRows<{ id: string; pp_id: string | null }>(
@@ -86,14 +86,14 @@ export async function getTutorStudents(): Promise<TutorStudent[]> {
         .filter((p) => inProgramme(p.gcse_alevel ?? "", p.exam_board ?? "", p.spec_level ?? ""))
         .map((p) => p.id),
     );
-    // Programme paper questions for this student's board — mirrors getDashboardData.
+    // Programme paper questions for this student's board - mirrors getDashboardData.
     const validQuestionIds = new Set(
       questions
         .filter((q) => q.pp_id && validPaperIds.has(q.pp_id))
         .map((q) => q.id),
     );
 
-    // Only rows that carry an outcome count as attempted — a cleared mark
+    // Only rows that carry an outcome count as attempted - a cleared mark
     // leaves the row behind with a null outcome.
     const totalAttempted = progress.filter(
       (p) =>
