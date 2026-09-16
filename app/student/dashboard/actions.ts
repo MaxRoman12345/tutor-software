@@ -140,7 +140,7 @@ export async function getDashboardData(
 
   // questions and progress are whole-table reads, so they have to be paged -
   // see lib/fetch-all.ts.
-  const [profileRes, topicsRes, papersRes, questions, progress] =
+  const [profileRes, topicsRes, papersRes, worksheetsRes, questions, progress] =
     await Promise.all([
       supabase
         .from("users")
@@ -153,16 +153,18 @@ export async function getDashboardData(
         .select(
           "id, gcse_alevel, exam_board, spec_level, module:paper_module, paper_year, qp_path, ms_path",
         ),
+      supabase.from("worksheets").select("id, module, topic_name, qp_path, ms_path"),
       fetchAllRows<{
         id: string;
         topic_id: string | null;
         difficulty: number | null;
         pp_id: string | null;
+        worksheet_id: string | null;
         question_number: string | null;
       }>("getDashboardData questions", (from, to) =>
         supabase
           .from("questions")
-          .select("id, topic_id, difficulty, pp_id, question_number")
+          .select("id, topic_id, difficulty, pp_id, worksheet_id, question_number")
           .order("id")
           .range(from, to),
       ),
@@ -183,6 +185,9 @@ export async function getDashboardData(
   const filter = programmeFilter(examBoard);
 
   const paperById = new Map((papersRes.data ?? []).map((p) => [p.id, p]));
+  const worksheetById = new Map(
+    (worksheetsRes.data ?? []).map((w) => [w.id, w]),
+  );
 
   const validPaperIds = new Set(
     (papersRes.data ?? [])
@@ -190,9 +195,15 @@ export async function getDashboardData(
       .map((p) => p.id),
   );
 
-  // Only questions from papers in this student's programme.
+  // Worksheets are A-Level and uni-board, so they count for every A-Level
+  // student's programme (never for GCSE students).
+  const isALevel = (examBoard ?? "").startsWith("A_LEVEL");
+
+  // Questions from papers in this student's programme, plus (for A-Level
+  // students) every worksheet question.
   const validQuestions = questions.filter(
-    (q) => q.pp_id && validPaperIds.has(q.pp_id),
+    (q) =>
+      (q.pp_id && validPaperIds.has(q.pp_id)) || (isALevel && q.worksheet_id),
   );
 
   const outcomeFor = new Map(
@@ -250,7 +261,7 @@ export async function getDashboardData(
       totalAttempted++;
     }
 
-    const sourceId = q.pp_id;
+    const sourceId = q.pp_id ?? q.worksheet_id;
     if (sourceId) {
       const key = `${q.topic_id}:${d}:${sourceId}`;
       if (!paperAccum.has(key)) {
@@ -276,11 +287,16 @@ export async function getDashboardData(
     if (!t) continue;
 
     const paper = paperById.get(sourceId);
+    const worksheet = worksheetById.get(sourceId);
     t.difficulty[diff].papers.push({
       id: sourceId,
-      label: paper ? paperLabel(paper) : sourceId,
-      qpPath: paper?.qp_path ?? null,
-      msPath: paper?.ms_path ?? null,
+      label: paper
+        ? paperLabel(paper)
+        : worksheet
+          ? `${moduleLabel(worksheet.module, "A_LEVEL")} · ${worksheet.topic_name ?? "Worksheet"}`
+          : sourceId,
+      qpPath: paper?.qp_path ?? worksheet?.qp_path ?? null,
+      msPath: paper?.ms_path ?? worksheet?.ms_path ?? null,
       unattempted: sortQuestions([...acc.unattempted]),
       completed: sortQuestions([...acc.completed.keys()]).map((num) => ({
         number: num,

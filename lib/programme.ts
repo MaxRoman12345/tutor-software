@@ -21,6 +21,13 @@
  * drift between them.
  */
 
+/**
+ * Pseudo "exam board" worksheets surface under. Worksheets are uni-board and
+ * A-Level, so they sit alongside the real boards under the A-Level qualification
+ * and count as in-programme for every A-Level student.
+ */
+export const WORKSHEET_BOARD = "Worksheets";
+
 // Comparison key for a board: uppercase, strip spaces/underscores.
 // "OCR A" and "OCR_A" both become "OCRA".
 function boardKey(board: string): string {

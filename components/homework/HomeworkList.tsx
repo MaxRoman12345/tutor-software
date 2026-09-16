@@ -9,6 +9,7 @@ import {
 } from '@/app/tutor/students/[student_id]/homework-actions'
 import {
   getQuestionsForPaper,
+  getQuestionsForWorksheet,
   type Outcome,
   type QuestionRow,
 } from '@/app/student/materials/actions'
@@ -175,7 +176,9 @@ export function HomeworkList({
       if (toLoad.length > 0) {
         setLoadingPapers((prev) => new Set([...prev, ...toLoad.map((p) => p.ppId)]))
         toLoad.forEach((p) => {
-          const load = getQuestionsForPaper(p.ppId, studentId)
+          const load = p.isWorksheet
+            ? getQuestionsForWorksheet(p.ppId, studentId)
+            : getQuestionsForPaper(p.ppId, studentId)
           load.then((rows) => {
             setQuestionsByPaper((prev) => ({ ...prev, [p.ppId]: rows }))
             setLoadingPapers((prev) => {

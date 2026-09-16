@@ -2,11 +2,35 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/server";
+import { WORKSHEET_BOARD } from "@/lib/programme";
 import {
   humanize,
   specLabel,
   moduleLabel,
 } from "@/components/students/materials/types";
+
+/**
+ * Junction rows (lesson_papers / homework_papers) store exactly one of
+ * pp_id / worksheet_id, so before inserting we need to know which column each
+ * selected id belongs in. Ask the worksheets table which of the ids are
+ * worksheets; the rest are past papers.
+ */
+async function splitSources(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ids: string[],
+): Promise<{ paperIds: string[]; worksheetIds: string[] }> {
+  if (ids.length === 0) return { paperIds: [], worksheetIds: [] };
+  const { data, error } = await supabase
+    .from("worksheets")
+    .select("id")
+    .in("id", ids);
+  if (error) console.error("splitSources error:", error);
+  const worksheetIds = new Set((data ?? []).map((w) => w.id));
+  return {
+    paperIds: ids.filter((id) => !worksheetIds.has(id)),
+    worksheetIds: ids.filter((id) => worksheetIds.has(id)),
+  };
+}
 
 export type LessonTopicEntry = {
   topicId: string;
@@ -83,18 +107,25 @@ export async function getLessonOptions(): Promise<{
 }> {
   const supabase = await createClient();
 
-  const [topicsRes, papersRes] = await Promise.all([
+  const [topicsRes, papersRes, worksheetsRes] = await Promise.all([
     supabase.from("topics").select("id, topic, section_course, gcse_alevel"),
     supabase
       .from("past_paper")
       .select("id, gcse_alevel, exam_board, module:paper_module, paper_year, spec_level")
       .order("paper_year", { ascending: false }),
+    supabase
+      .from("worksheets")
+      .select("id, module, topic_name")
+      .order("module")
+      .order("topic_name"),
   ]);
 
   if (topicsRes.error)
     console.error("getLessonOptions topics:", topicsRes.error);
   if (papersRes.error)
     console.error("getLessonOptions papers:", papersRes.error);
+  if (worksheetsRes.error)
+    console.error("getLessonOptions worksheets:", worksheetsRes.error);
 
   const topics: TopicOption[] = (topicsRes.data ?? [])
     .map((t) => ({
@@ -127,7 +158,23 @@ export async function getLessonOptions(): Promise<{
     };
   });
 
-  return { topics, papers };
+  // Worksheets slot into the same picker under A Level → Worksheets → Worksheets
+  // → module, with the worksheet's topic at the leaf where a paper's year sits.
+  const worksheets: PaperOption[] = (worksheetsRes.data ?? []).map((w) => {
+    const moduleText = moduleLabel(w.module, "A_LEVEL");
+    const topic = w.topic_name ?? "Worksheet";
+    return {
+      id: w.id,
+      qual: "A Level",
+      board: WORKSHEET_BOARD,
+      module: moduleText,
+      year: topic,
+      spec: WORKSHEET_BOARD,
+      label: `${moduleText} · ${topic}`.trim(),
+    };
+  });
+
+  return { topics, papers: [...papers, ...worksheets] };
 }
 
 export async function getLessons(studentId: string): Promise<Lesson[]> {
@@ -141,8 +188,8 @@ export async function getLessons(studentId: string): Promise<Lesson[]> {
        duration_minutes,
        notes,
        lesson_topics ( topic_id, minutes, topics ( topic ) ),
-       lesson_papers ( pp_id, past_paper ( gcse_alevel, exam_board, module:paper_module, paper_year, qp_path, ms_path ) ),
-       homework ( id, title, notes, due_date, homework_papers ( pp_id ), homework_files ( path, name ) )`,
+       lesson_papers ( pp_id, worksheet_id, past_paper ( gcse_alevel, exam_board, module:paper_module, paper_year, qp_path, ms_path ), worksheets ( module, topic_name, qp_path, ms_path ) ),
+       homework ( id, title, notes, due_date, homework_papers ( pp_id, worksheet_id ), homework_files ( path, name ) )`,
     )
     .eq("student_id", studentId)
     .order("date", { ascending: false });
@@ -164,11 +211,18 @@ export async function getLessons(studentId: string): Promise<Lesson[]> {
     }[];
     lesson_papers: {
       pp_id: string | null;
+      worksheet_id: string | null;
       past_paper: {
         gcse_alevel: string | null;
         exam_board: string | null;
         module: string | null;
         paper_year: string | null;
+        qp_path: string | null;
+        ms_path: string | null;
+      } | null;
+      worksheets: {
+        module: string | null;
+        topic_name: string | null;
         qp_path: string | null;
         ms_path: string | null;
       } | null;
@@ -178,7 +232,7 @@ export async function getLessons(studentId: string): Promise<Lesson[]> {
       title: string;
       notes: string | null;
       due_date: string | null;
-      homework_papers: { pp_id: string | null }[];
+      homework_papers: { pp_id: string | null; worksheet_id: string | null }[];
       homework_files: { path: string; name: string }[];
     }[];
   };
@@ -210,15 +264,20 @@ export async function getLessons(studentId: string): Promise<Lesson[]> {
         }))
         .sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0)),
       papers: (l.lesson_papers ?? [])
-        .filter((lp) => lp.pp_id)
-        .map((lp) => ({
-          ppId: lp.pp_id as string,
-          label: lp.past_paper
-            ? `${humanize(lp.past_paper.exam_board)} ${moduleLabel(lp.past_paper.module, lp.past_paper.gcse_alevel)} ${lp.past_paper.paper_year ?? ""}`.trim()
-            : "Unknown material",
-          qpPath: lp.past_paper?.qp_path ?? null,
-          msPath: lp.past_paper?.ms_path ?? null,
-        })),
+        .filter((lp) => lp.pp_id || lp.worksheet_id)
+        .map((lp) => {
+          const ws = lp.worksheets;
+          return {
+            ppId: (lp.pp_id ?? lp.worksheet_id) as string,
+            label: lp.past_paper
+              ? `${humanize(lp.past_paper.exam_board)} ${moduleLabel(lp.past_paper.module, lp.past_paper.gcse_alevel)} ${lp.past_paper.paper_year ?? ""}`.trim()
+              : ws
+                ? `${moduleLabel(ws.module, "A_LEVEL")} · ${ws.topic_name ?? "Worksheet"}`.trim()
+                : "Unknown material",
+            qpPath: lp.past_paper?.qp_path ?? ws?.qp_path ?? null,
+            msPath: lp.past_paper?.ms_path ?? ws?.ms_path ?? null,
+          };
+        }),
       // one homework per lesson in practice; take the first if there are more
       homework: l.homework?.[0]
         ? {
@@ -227,7 +286,7 @@ export async function getLessons(studentId: string): Promise<Lesson[]> {
             notes: l.homework[0].notes,
             dueDate: l.homework[0].due_date,
             paperIds: (l.homework[0].homework_papers ?? [])
-              .map((p) => p.pp_id)
+              .map((p) => p.pp_id ?? p.worksheet_id)
               .filter((id): id is string => !!id),
             files: (l.homework[0].homework_files ?? []).map((f) => ({
               path: f.path,
@@ -302,9 +361,11 @@ export async function createLesson(input: CreateLessonInput) {
   }
 
   if (input.paperIds.length > 0) {
-    const { error } = await supabase.from("lesson_papers").insert(
-      input.paperIds.map((pp_id) => ({ lesson_id: lesson.id, pp_id })),
-    );
+    const { paperIds, worksheetIds } = await splitSources(supabase, input.paperIds);
+    const { error } = await supabase.from("lesson_papers").insert([
+      ...paperIds.map((pp_id) => ({ lesson_id: lesson.id, pp_id })),
+      ...worksheetIds.map((worksheet_id) => ({ lesson_id: lesson.id, worksheet_id })),
+    ]);
     if (error) {
       await supabase.from("lessons").delete().eq("id", lesson.id);
       console.error("createLesson papers error:", error);
@@ -334,9 +395,14 @@ export async function createLesson(input: CreateLessonInput) {
     }
 
     if (input.homework.paperIds.length > 0) {
-      const { error } = await supabase.from("homework_papers").insert(
-        input.homework.paperIds.map((pp_id) => ({ homework_id: hw.id, pp_id })),
+      const { paperIds, worksheetIds } = await splitSources(
+        supabase,
+        input.homework.paperIds,
       );
+      const { error } = await supabase.from("homework_papers").insert([
+        ...paperIds.map((pp_id) => ({ homework_id: hw.id, pp_id })),
+        ...worksheetIds.map((worksheet_id) => ({ homework_id: hw.id, worksheet_id })),
+      ]);
       if (error) {
         await supabase.from("homework").delete().eq("id", hw.id);
         await supabase.from("lessons").delete().eq("id", lesson.id);
@@ -420,9 +486,11 @@ export async function updateLesson(input: UpdateLessonInput) {
   // replace papers
   await supabase.from("lesson_papers").delete().eq("lesson_id", input.lessonId);
   if (input.paperIds.length > 0) {
-    const { error } = await supabase.from("lesson_papers").insert(
-      input.paperIds.map((pp_id) => ({ lesson_id: input.lessonId, pp_id })),
-    );
+    const { paperIds, worksheetIds } = await splitSources(supabase, input.paperIds);
+    const { error } = await supabase.from("lesson_papers").insert([
+      ...paperIds.map((pp_id) => ({ lesson_id: input.lessonId, pp_id })),
+      ...worksheetIds.map((worksheet_id) => ({ lesson_id: input.lessonId, worksheet_id })),
+    ]);
     if (error) {
       console.error("updateLesson papers error:", error);
       return { error: error.message };
@@ -480,9 +548,11 @@ export async function updateLesson(input: UpdateLessonInput) {
       .delete()
       .eq("homework_id", homeworkId);
     if (hw.paperIds.length > 0) {
-      const { error } = await supabase.from("homework_papers").insert(
-        hw.paperIds.map((pp_id) => ({ homework_id: homeworkId, pp_id })),
-      );
+      const { paperIds, worksheetIds } = await splitSources(supabase, hw.paperIds);
+      const { error } = await supabase.from("homework_papers").insert([
+        ...paperIds.map((pp_id) => ({ homework_id: homeworkId, pp_id })),
+        ...worksheetIds.map((worksheet_id) => ({ homework_id: homeworkId, worksheet_id })),
+      ]);
       if (error) {
         console.error("updateLesson homework papers error:", error);
         return { error: error.message };

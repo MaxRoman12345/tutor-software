@@ -14,6 +14,16 @@ export type Paper = {
   spec_level: string | null;
   qp_path: string | null;
   ms_path: string | null;
+  /** True for a worksheet surfaced as a pseudo-paper (id is a worksheet id). */
+  isWorksheet?: boolean;
+};
+
+export type Worksheet = {
+  id: string;
+  module: string | null;
+  topic_name: string | null;
+  qp_path: string | null;
+  ms_path: string | null;
 };
 
 export type Outcome = "correct" | "partial" | "incorrect";
@@ -72,6 +82,25 @@ export async function getPapers(): Promise<Paper[]> {
 }
 
 /**
+ * Every worksheet. Worksheets are A-Level, uni-board and organised by module
+ * (Pure / Statistics / Mechanics) with a topic name each.
+ */
+export async function getWorksheets(): Promise<Worksheet[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("worksheets")
+    .select("id, module, topic_name, qp_path, ms_path")
+    .order("module")
+    .order("topic_name");
+
+  if (error) {
+    console.error("getWorksheets error:", error);
+    return [];
+  }
+  return data ?? [];
+}
+
+/**
  * studentId: optional. Omit for the logged-in student's own progress.
  * Pass a specific student's id (tutor view) to see their progress instead -
  * relies on RLS to enforce the caller is allowed to read that student's rows.
@@ -92,12 +121,12 @@ export async function getAllProgress(
 
   // Both are whole-table reads, so they have to be paged - see lib/fetch-all.ts.
   const [questions, progress] = await Promise.all([
-    fetchAllRows<{ id: string; pp_id: string | null }>(
+    fetchAllRows<{ id: string; pp_id: string | null; worksheet_id: string | null }>(
       "getAllProgress questions",
       (from, to) =>
         supabase
           .from("questions")
-          .select("id, pp_id")
+          .select("id, pp_id, worksheet_id")
           .order("id")
           .range(from, to),
     ),
@@ -120,7 +149,8 @@ export async function getAllProgress(
   const bySource: Record<string, PaperProgress> = {};
 
   for (const q of questions) {
-    const sourceId = q.pp_id;
+    // a question belongs to exactly one source — a paper or a worksheet
+    const sourceId = q.pp_id ?? q.worksheet_id;
     if (!sourceId) continue;
     bySource[sourceId] ??= { total: 0, correct: 0, partial: 0, incorrect: 0 };
     bySource[sourceId].total++;
@@ -139,7 +169,7 @@ export async function getAllProgress(
  * marks. studentId: optional, same convention as getAllProgress above.
  */
 async function getQuestionsForSource(
-  match: { pp_id: string },
+  match: { pp_id: string } | { worksheet_id: string },
   studentId?: string,
 ): Promise<QuestionRow[]> {
   const supabase = await createClient();
@@ -196,6 +226,14 @@ export async function getQuestionsForPaper(
   studentId?: string,
 ): Promise<QuestionRow[]> {
   return getQuestionsForSource({ pp_id: paperId }, studentId);
+}
+
+/** studentId optional - omit for a browse view with no marks. */
+export async function getQuestionsForWorksheet(
+  worksheetId: string,
+  studentId?: string,
+): Promise<QuestionRow[]> {
+  return getQuestionsForSource({ worksheet_id: worksheetId }, studentId);
 }
 
 export async function setQuestionOutcome(questionId: string, outcome: Outcome) {

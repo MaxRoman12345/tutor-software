@@ -5,8 +5,9 @@ import { createClient } from "@/lib/server";
 import { humanize, moduleLabel } from "@/components/students/materials/types";
 
 export type HomeworkPaper = {
-  /** past_paper id. */
+  /** past_paper id, or a worksheet id when isWorksheet. */
   ppId: string;
+  isWorksheet: boolean;
   label: string;
   qpPath: string | null;
   msPath: string | null;
@@ -50,8 +51,9 @@ export async function getHomework(studentId: string): Promise<HomeworkItem[]> {
     .from("homework")
     .select(
       `id, title, notes, assigned_date, due_date, completed,
-       homework_papers ( pp_id,
-         past_paper ( gcse_alevel, exam_board, module:paper_module, paper_year, qp_path, ms_path ) ),
+       homework_papers ( pp_id, worksheet_id,
+         past_paper ( gcse_alevel, exam_board, module:paper_module, paper_year, qp_path, ms_path ),
+         worksheets ( module, topic_name, qp_path, ms_path ) ),
        homework_files ( path, name )`,
     )
     .eq("student_id", studentId)
@@ -71,11 +73,18 @@ export async function getHomework(studentId: string): Promise<HomeworkItem[]> {
     completed: boolean;
     homework_papers: {
       pp_id: string | null;
+      worksheet_id: string | null;
       past_paper: {
         gcse_alevel: string | null;
         exam_board: string | null;
         module: string | null;
         paper_year: string | null;
+        qp_path: string | null;
+        ms_path: string | null;
+      } | null;
+      worksheets: {
+        module: string | null;
+        topic_name: string | null;
         qp_path: string | null;
         ms_path: string | null;
       } | null;
@@ -95,28 +104,58 @@ export async function getHomework(studentId: string): Promise<HomeworkItem[]> {
       ),
     ),
   ];
+  const worksheetIds = [
+    ...new Set(
+      rows.flatMap((r) =>
+        (r.homework_papers ?? [])
+          .map((p) => p.worksheet_id)
+          .filter((id): id is string => !!id),
+      ),
+    ),
+  ];
 
-  // Progress is derived, not stored: every question in an attached paper counts
-  // toward the homework, using whatever the student marked in Materials.
-  const paperQs =
+  // Progress is derived, not stored: every question in an attached paper or
+  // worksheet counts toward the homework, using whatever the student marked.
+  const [paperQs, worksheetQs] = await Promise.all([
     paperIds.length > 0
-      ? await supabase.from("questions").select("id, pp_id").in("pp_id", paperIds)
-      : { data: [], error: null };
+      ? supabase.from("questions").select("id, pp_id").in("pp_id", paperIds)
+      : Promise.resolve({ data: [], error: null }),
+    worksheetIds.length > 0
+      ? supabase
+          .from("questions")
+          .select("id, worksheet_id")
+          .in("worksheet_id", worksheetIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
 
   if (paperQs.error) console.error("getHomework paper questions:", paperQs.error);
+  if (worksheetQs.error)
+    console.error("getHomework worksheet questions:", worksheetQs.error);
 
-  // keyed by past_paper id
+  // keyed by source id (past_paper id or worksheet id)
   const questionsByPaper = new Map<string, string[]>();
   for (const q of (paperQs.data ?? []) as { id: string; pp_id: string | null }[]) {
     if (!q.pp_id) continue;
     if (!questionsByPaper.has(q.pp_id)) questionsByPaper.set(q.pp_id, []);
     questionsByPaper.get(q.pp_id)!.push(q.id);
   }
+  for (const q of (worksheetQs.data ?? []) as {
+    id: string;
+    worksheet_id: string | null;
+  }[]) {
+    if (!q.worksheet_id) continue;
+    if (!questionsByPaper.has(q.worksheet_id))
+      questionsByPaper.set(q.worksheet_id, []);
+    questionsByPaper.get(q.worksheet_id)!.push(q.id);
+  }
 
   // Only the questions these homeworks actually cover - reading the student's
   // whole progress table here used to hit PostgREST's 1000-row cap and report
   // completed questions as unmarked.
-  const questionIds = (paperQs.data ?? []).map((q) => q.id);
+  const questionIds = [
+    ...(paperQs.data ?? []).map((q) => q.id),
+    ...(worksheetQs.data ?? []).map((q) => q.id),
+  ];
 
   const progressRes = await supabase
     .from("student_question_progress")
@@ -145,7 +184,7 @@ export async function getHomework(studentId: string): Promise<HomeworkItem[]> {
     let incorrect = 0;
 
     for (const hp of r.homework_papers ?? []) {
-      const sourceId = hp.pp_id;
+      const sourceId = hp.pp_id ?? hp.worksheet_id;
       if (!sourceId) continue;
       for (const qid of questionsByPaper.get(sourceId) ?? []) {
         total++;
@@ -177,15 +216,21 @@ export async function getHomework(studentId: string): Promise<HomeworkItem[]> {
       dueLabel: r.due_date ? dateLabel(r.due_date) : null,
       daysUntilDue,
       papers: (r.homework_papers ?? [])
-        .filter((hp) => hp.pp_id)
-        .map((hp) => ({
-          ppId: hp.pp_id as string,
-          label: hp.past_paper
-            ? `${humanize(hp.past_paper.exam_board)} ${moduleLabel(hp.past_paper.module, hp.past_paper.gcse_alevel)} ${hp.past_paper.paper_year ?? ""}`.trim()
-            : "Unknown material",
-          qpPath: hp.past_paper?.qp_path ?? null,
-          msPath: hp.past_paper?.ms_path ?? null,
-        })),
+        .filter((hp) => hp.pp_id || hp.worksheet_id)
+        .map((hp) => {
+          const ws = hp.worksheets;
+          return {
+            ppId: (hp.pp_id ?? hp.worksheet_id) as string,
+            isWorksheet: !!hp.worksheet_id,
+            label: hp.past_paper
+              ? `${humanize(hp.past_paper.exam_board)} ${moduleLabel(hp.past_paper.module, hp.past_paper.gcse_alevel)} ${hp.past_paper.paper_year ?? ""}`.trim()
+              : ws
+                ? `${moduleLabel(ws.module, "A_LEVEL")} · ${ws.topic_name ?? "Worksheet"}`.trim()
+                : "Unknown material",
+            qpPath: hp.past_paper?.qp_path ?? ws?.qp_path ?? null,
+            msPath: hp.past_paper?.ms_path ?? ws?.ms_path ?? null,
+          };
+        }),
       total,
       correct,
       partial,

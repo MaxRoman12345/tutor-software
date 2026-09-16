@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   getPapers,
+  getWorksheets,
   getQuestionsForPaper,
+  getQuestionsForWorksheet,
   type Paper,
   type QuestionRow,
 } from '@/app/student/materials/actions'
+import { WORKSHEET_BOARD } from '@/lib/programme'
 import { ErrorState } from '@/components/ui/ErrorState'
 import {
   humanize,
@@ -96,8 +99,21 @@ export default function TutorMaterialsPage() {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    getPapers()
-      .then((p) => setPapers(p))
+    Promise.all([getPapers(), getWorksheets()])
+      .then(([p, ws]) => {
+        const worksheetPapers: Paper[] = ws.map((w) => ({
+          id: w.id,
+          gcse_alevel: 'A_LEVEL',
+          paper_year: w.topic_name,
+          exam_board: WORKSHEET_BOARD,
+          module: w.module,
+          spec_level: WORKSHEET_BOARD,
+          qp_path: w.qp_path,
+          ms_path: w.ms_path,
+          isWorksheet: true,
+        }))
+        setPapers([...p, ...worksheetPapers])
+      })
       .catch((e) => setError(e?.message ?? 'Failed to load materials.'))
       .finally(() => setLoading(false))
   }, [])
@@ -158,7 +174,11 @@ export default function TutorMaterialsPage() {
     setOpenPaper(paper)
     setQLoading(true)
     // no studentId - this is a browse view, outcomes/notes come back null
-    setQuestions(await getQuestionsForPaper(paper.id))
+    setQuestions(
+      paper.isWorksheet
+        ? await getQuestionsForWorksheet(paper.id)
+        : await getQuestionsForPaper(paper.id)
+    )
     setQLoading(false)
   }
 
@@ -183,8 +203,12 @@ export default function TutorMaterialsPage() {
     const boardText = humanize(openPaper.exam_board)
     const qpUrl = pdfUrl(openPaper.qp_path)
     const msUrl = pdfUrl(openPaper.ms_path)
-    const paperLabel = `${boardText} ${moduleText} ${openPaper.paper_year ?? ''}`.trim()
-    const heading = `${boardText} ${moduleText} · ${openPaper.paper_year}`
+    const paperLabel = openPaper.isWorksheet
+      ? `${moduleText} ${openPaper.paper_year ?? ''}`.trim()
+      : `${boardText} ${moduleText} ${openPaper.paper_year ?? ''}`.trim()
+    const heading = openPaper.isWorksheet
+      ? `${moduleText} · ${openPaper.paper_year}`
+      : `${boardText} ${moduleText} · ${openPaper.paper_year}`
 
     return (
       <div>

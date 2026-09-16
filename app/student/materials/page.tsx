@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   getPapers,
+  getWorksheets,
   getQuestionsForPaper,
+  getQuestionsForWorksheet,
   getAllProgress,
   getMyExamBoard,
   type Outcome,
@@ -11,7 +13,7 @@ import {
   type PaperProgress,
   type QuestionRow,
 } from './actions'
-import { programmeFilter } from '@/lib/programme'
+import { programmeFilter, WORKSHEET_BOARD } from '@/lib/programme'
 import {
   type Progress,
   EMPTY,
@@ -224,9 +226,22 @@ export default function MaterialsPage() {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(() => {
-    Promise.all([getPapers(), getAllProgress(), getMyExamBoard()])
-      .then(([p, pr, eb]) => {
-        setPapers(p)
+    Promise.all([getPapers(), getWorksheets(), getAllProgress(), getMyExamBoard()])
+      .then(([p, ws, pr, eb]) => {
+        // Surface worksheets as pseudo-papers so the whole browse/mark flow is
+        // reused: A-Level → Worksheets → Worksheets → module → topic cards.
+        const worksheetPapers: Paper[] = ws.map((w) => ({
+          id: w.id,
+          gcse_alevel: 'A_LEVEL',
+          paper_year: w.topic_name,
+          exam_board: WORKSHEET_BOARD,
+          module: w.module,
+          spec_level: WORKSHEET_BOARD,
+          qp_path: w.qp_path,
+          ms_path: w.ms_path,
+          isWorksheet: true,
+        }))
+        setPapers([...p, ...worksheetPapers])
         setProgress(pr)
         setExamBoard(eb)
 
@@ -312,7 +327,8 @@ export default function MaterialsPage() {
   }, [examBoard, papers, inProgramme])
   const highlightBoard = useMemo(() => {
     if (!examBoard || !qual) return undefined
-    return (b: string) => inProgramme(qual, b)
+    // Worksheets belong to every A-Level student's programme.
+    return (b: string) => b === WORKSHEET_BOARD || inProgramme(qual, b)
   }, [examBoard, qual, inProgramme])
   const myBoard = useMemo(
     () => (highlightBoard ? boards.find(highlightBoard) ?? null : null),
@@ -350,7 +366,11 @@ export default function MaterialsPage() {
   const openYear = async (paper: Paper) => {
     setOpenPaper(paper)
     setQLoading(true)
-    setQuestions(await getQuestionsForPaper(paper.id))
+    setQuestions(
+      paper.isWorksheet
+        ? await getQuestionsForWorksheet(paper.id)
+        : await getQuestionsForPaper(paper.id)
+    )
     setQLoading(false)
   }
 
@@ -391,10 +411,16 @@ export default function MaterialsPage() {
   if (openPaper) {
     const moduleText = moduleLabel(openPaper.module, openPaper.gcse_alevel)
     const boardText = humanize(openPaper.exam_board)
-    const label = `${boardText} ${moduleText} ${openPaper.paper_year ?? ''}`.trim()
+    // Worksheets read "Pure Mathematics · Vectors In 2d" (no board/year prefix).
+    const title = openPaper.isWorksheet
+      ? `${moduleText} · ${openPaper.paper_year}`
+      : `${boardText} ${moduleText} · ${openPaper.paper_year}`
+    const label = openPaper.isWorksheet
+      ? `${moduleText} ${openPaper.paper_year ?? ''}`.trim()
+      : `${boardText} ${moduleText} ${openPaper.paper_year ?? ''}`.trim()
     return (
       <PaperDetail
-        title={`${boardText} ${moduleText} · ${openPaper.paper_year}`}
+        title={title}
         fileLabel={label}
         qpPath={openPaper.qp_path}
         msPath={openPaper.ms_path}

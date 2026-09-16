@@ -49,12 +49,12 @@ export async function getTutorStudents(): Promise<TutorStudent[]> {
   // paged - see lib/fetch-all.ts.
   const [papersRes, questions, progress] = await Promise.all([
     supabase.from("past_paper").select("id, gcse_alevel, exam_board, spec_level"),
-    fetchAllRows<{ id: string; pp_id: string | null }>(
+    fetchAllRows<{ id: string; pp_id: string | null; worksheet_id: string | null }>(
       "getTutorStudents questions",
       (from, to) =>
         supabase
           .from("questions")
-          .select("id, pp_id")
+          .select("id, pp_id, worksheet_id")
           .order("id")
           .range(from, to),
     ),
@@ -86,10 +86,16 @@ export async function getTutorStudents(): Promise<TutorStudent[]> {
         .filter((p) => inProgramme(p.gcse_alevel ?? "", p.exam_board ?? "", p.spec_level ?? ""))
         .map((p) => p.id),
     );
-    // Programme paper questions for this student's board - mirrors getDashboardData.
+    // Programme paper questions for this student's board, plus every worksheet
+    // question for A-Level students - mirrors getDashboardData.
+    const isALevel = (s.exam_board ?? "").startsWith("A_LEVEL");
     const validQuestionIds = new Set(
       questions
-        .filter((q) => q.pp_id && validPaperIds.has(q.pp_id))
+        .filter(
+          (q) =>
+            (q.pp_id && validPaperIds.has(q.pp_id)) ||
+            (isALevel && q.worksheet_id),
+        )
         .map((q) => q.id),
     );
 
